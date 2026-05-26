@@ -1,0 +1,44 @@
+' ==============================================================================
+'  Base62 고유 난수(ID) 생성 스크립트
+'  Base32 = 숫자, 알파벳 대문자 -> MOD 32 사용
+' ==============================================================================
+
+' [STEP 1] 현재 비전 검사 실행 데이터 캡처
+@ProgTime = %PrcTime                                ' 밀리초 단위의 프로세싱 타임
+@TrgCount = %PrcCount                               ' 부팅 이후 누적 트리거 카운트
+
+' [STEP 2] 카운터 리셋 충돌 방지용 10자리 타임스탬프 생성 (MMDDHHMMSS)
+' #Time_Stamp_YMD에서 연도(YYYY)를 절삭한 후 시분초(#Time_Stamp_HMS)와 결합
+#TimeStamp = ((#Time_Stamp_YMD - (Int(#Time_Stamp_YMD / 10000) * 10000)) * 1000000) + #Time_Stamp_HMS
+
+' [STEP 3] 데이터 소스 결합 및 초기 마스터 시드 설정
+' 승수 141650939를 활용해 연속 트리거 카운트 간의 시드 분산력 극대화
+#RwOpSeed = (@TrgCount * 141650939) + Int(@ProgTime * 1000) + #RwOpREELID1 + #TimeStamp
+
+' [STEP 4] 64비트 실수 엔진 내 정밀도 파괴 방지를 위한 수동 32비트 마스킹
+' 시드값을 안전한 32비트 정수 범위(0 ~ 4294967295) 내로 강제 제한
+#RwOpSeed = #RwOpSeed - (Int(#RwOpSeed / 4294967296) * 4294967296)
+
+' [STEP 5] 8자리 Base62 문자 변환 루프
+FOR @Idx = 0 TO 7
+
+    ' 5-1. 내부 LCG 스크램블링 연산 
+    #RwOpSeed = (#RwOpSeed * 134775813) + 12345
+    #RwOpSeed = #RwOpSeed - (Int(#RwOpSeed / 4294967296) * 4294967296)
+    
+    ' 5-2. 균일 분산을 위해 고엔트로피 중간 영역 비트 추출 후 Modulo 62 연산
+    @CurrentVal = Int(#RwOpSeed / 6927366) - (Int(Int(#RwOpSeed / 6927366) / 62) * 62)
+    
+    ' 5-3. 추출 값(0 ~ 61)을 통신/DB 안전 규칙에 맞게 아스키(ASCII) 코드로 인코딩
+    IF @CurrentVal < 10 THEN
+        #RwOpObject_conv[@Idx] = @CurrentVal + 48           ' 0 ~ 9 -> 아스키 '0' ~ '9' (ASCII 48~57)
+
+    ELSE IF @CurrentVal < 36 THEN
+        #RwOpObject_conv[@Idx] = @CurrentVal + 55           ' 10 ~ 35 -> 아스키 'A' ~ 'Z' (ASCII 65~90)
+
+    ELSE
+        #RwOpObject_conv[@Idx] = @CurrentVal + 61           ' 36 ~ 61 -> 아스키 'a' ~ 'z' (ASCII 97~122)
+
+    END IF
+
+NEXT
