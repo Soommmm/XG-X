@@ -1,0 +1,150 @@
+
+
+' Init
+IF #Roll_Change_Signal = 1 THEN
+
+	FOR @i = 1 TO 4
+		#Cam1_Count[@i] = 0
+		#Cam1_Mean[@i] = 0
+		#Cam1_VarSum[@i] = 0
+		#Cam1_Sigma[@i] = 0
+		#Cam1_Cp[@i] = 0
+		#Cam1_uCpk[@i] = 0
+		#Cam1_lCpk[@i] = 0
+		#Cam1_Cpk[@i] = 0
+
+		#Cam1_Max[@i] = -999999.999
+		#Cam1_Min[@i] = 999999.999
+		#Cam1_Delta[@i] = 0
+		#Cam1_RejectRate[@i] = 0
+
+		#Cam1_Countok[@i] = 0
+		#Cam1_Meanok[@i] = 0
+		#Cam1_VarSumok[@i] = 0
+		#Cam1_Sigmaok[@i] = 0
+		#Cam1_Cpok[@i] = 0
+		#Cam1_uCpkok[@i] = 0
+		#Cam1_lCpkok[@i] = 0
+		#Cam1_Cpkok[@i] = 0
+	NEXT
+
+END IF
+
+
+
+
+
+' Calc Pitch
+#Cam1_Nominal[1] = ( #Cam1_Pitch_USL + #Cam1_Pitch_LSL ) / 2
+
+#Cam1_Pitch = ( Abs(!U[0012].RSLT.X[JGL]:AB - !U[0011].RSLT.X[JGL]:AB ) * #Cam1_Resol ) + #Offset1[0]
+
+ANS = #Cam1_Pitch
+
+#Cam1_Pitch_SumSq = Sqr(#Cam1_Pitch)
+
+
+
+
+
+' All Data
+#Cam1_Count[1] = #Cam1_Count[1] + 1
+
+
+	' Max/Min ??
+	IF #Cam1_Count[1] = 1 THEN
+		#Cam1_Max[1] = #Cam1_Pitch
+		#Cam1_Min[1] = #Cam1_Pitch
+	ELSE
+		IF #Cam1_Pitch > #Cam1_Max[1] THEN
+			#Cam1_Max[1] = #Cam1_Pitch
+		END IF
+		IF #Cam1_Pitch < #Cam1_Min[1] THEN
+			#Cam1_Min[1] = #Cam1_Pitch
+		END IF
+	END IF
+
+
+	IF #Cam1_Count[1] = 1 THEN
+		#Cam1_Mean[1] = #Cam1_Pitch
+		#Cam1_VarSum[1] = 0
+	ELSE
+		@Delta = #Cam1_Pitch - #Cam1_Mean[1]
+		#Cam1_Mean[1] = #Cam1_Mean[1] + (@Delta / #Cam1_Count[1])
+		#Cam1_VarSum[1] = #Cam1_VarSum[1] + (@Delta * (#Cam1_Pitch - #Cam1_Mean[1]))
+	END IF
+
+
+	' Delta (Average - Nominal)
+	#Cam1_Delta[1] = #Cam1_Mean[1] - #Cam1_Nominal[1]
+
+
+	IF #Cam1_Count[1] > 1 THEN
+		@PitchSigmaTemp = #Cam1_VarSum[1] / (#Cam1_Count[1] - 1)
+		#Cam1_Sigma[1] = Sqrt(@PitchSigmaTemp)
+	ELSE
+		#Cam1_Sigma[1] = 0
+	END IF
+
+
+
+	IF #Cam1_Sigma[1] > 0.000000001 THEN
+		#Cam1_Cp[1] = (#Cam1_Pitch_USL - #Cam1_Pitch_LSL) / (6 * #Cam1_Sigma[1])
+		#Cam1_uCpk[1] = (#Cam1_Pitch_USL - #Cam1_Mean[1]) / (3 * #Cam1_Sigma[1])
+		#Cam1_lCpk[1] = (#Cam1_Mean[1] - #Cam1_Pitch_LSL) / (3 * #Cam1_Sigma[1])
+		#Cam1_Cpk[1] = Min(#Cam1_uCpk[1] , #Cam1_lCpk[1])
+	ELSE
+		#Cam1_Cpk[1] = 0
+		#Cam1_Cp[1] = 0
+	END IF
+
+
+
+
+
+' OK Data
+IF #Cam1_Pitch >= #Cam1_Pitch_LSL AND #Cam1_Pitch <= #Cam1_Pitch_USL THEN
+	
+	#Cam1_Countok[1] = #Cam1_Countok[1] + 1
+	
+		IF #Cam1_Countok[1] = 1 THEN
+			#Cam1_Meanok[1] = #Cam1_Pitch
+			#Cam1_VarSumok[1] = 0
+		ELSE
+			@Deltaok = #Cam1_Pitch - #Cam1_Meanok[1]
+			#Cam1_Meanok[1] = #Cam1_Meanok[1] + (@Deltaok / #Cam1_Countok[1])
+			#Cam1_VarSumok[1] = #Cam1_VarSumok[1] + (@Deltaok * (#Cam1_Pitch - #Cam1_Meanok[1]))
+		END IF
+		
+
+
+		IF #Cam1_Countok[1] > 1 THEN
+			@PitchSigmaTemp = #Cam1_VarSumok[1] / (#Cam1_Countok[1] - 1)
+			#Cam1_Sigmaok[1] = Sqrt(@PitchSigmaTemp)
+		ELSE
+			#Cam1_Sigmaok[1] = 0
+		END IF
+
+		
+		IF #Cam1_Sigmaok[1] > 0.000000001 THEN
+			#Cam1_Cpok[1] = (#Cam1_Pitch_USL - #Cam1_Pitch_LSL) / (6 * #Cam1_Sigmaok[1])
+			#Cam1_uCpkok[1] = (#Cam1_Pitch_USL - #Cam1_Meanok[1]) / (3 * #Cam1_Sigmaok[1])
+			#Cam1_lCpkok[1] = (#Cam1_Meanok[1] - #Cam1_Pitch_LSL) / (3 * #Cam1_Sigmaok[1])
+			#Cam1_Cpkok[1] = Min(#Cam1_uCpkok[1] , #Cam1_lCpkok[1])
+		ELSE
+			#Cam1_Cpkok[1] = 0
+			#Cam1_Cpok[1] = 0
+		END IF
+
+
+END IF
+
+
+
+
+' Rejects %
+IF #Cam1_Count[1] > 0 THEN
+	#Cam1_RejectRate[1] = (1.0 - (#Cam1_Countok[1] / #Cam1_Count[1])) * 100.0
+END IF
+
+
